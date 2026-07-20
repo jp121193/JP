@@ -72,7 +72,9 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await api.post("/auth/logout");
-    } catch {}
+    } catch {
+      /* Server-side logout is best-effort; local state is cleared regardless. */
+    }
     localStorage.removeItem("jp_token");
     setUser(null);
   };

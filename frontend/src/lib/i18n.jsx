@@ -294,7 +294,9 @@ export function I18nProvider({ children }) {
     setLangState(l);
     try {
       localStorage.setItem("jp_lang", l);
-    } catch {}
+    } catch {
+      /* Safari private mode: silently skip persistence, state still updates. */
+    }
   };
 
   const t = (key, vars) => {
