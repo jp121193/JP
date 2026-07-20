@@ -9,18 +9,9 @@ import {
   Buildings,
   Boat,
   ArrowUpRight,
-  WhatsappLogo,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
-
-function whatsappHref(phone) {
-  if (!phone) return null;
-  const digits = String(phone).replace(/\D/g, "");
-  if (!digits) return null;
-  const withCC = digits.length === 10 ? `91${digits}` : digits;
-  return `https://wa.me/${withCC}`;
-}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -53,8 +44,7 @@ export default function DashboardPage() {
     return ceramics.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.category.toLowerCase().includes(q) ||
-        (c.phone || "").toLowerCase().includes(q)
+        c.category.toLowerCase().includes(q)
     );
   }, [ceramics, query]);
 
@@ -64,8 +54,7 @@ export default function DashboardPage() {
     return yards.filter(
       (y) =>
         y.name.toLowerCase().includes(q) ||
-        y.port.toLowerCase().includes(q) ||
-        (y.phone || "").toLowerCase().includes(q)
+        y.port.toLowerCase().includes(q)
     );
   }, [yards, query]);
 
@@ -191,18 +180,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 self-start sm:self-center">
-                  {whatsappHref(c.phone) && (
-                    <a
-                      data-testid={`ceramic-whatsapp-link-${c.id}`}
-                      href={whatsappHref(c.phone)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
-                    >
-                      <WhatsappLogo size={14} weight="bold" />
-                      {t("dashboard.whatsapp")}
-                    </a>
-                  )}
                   <a
                     data-testid={`ceramic-map-link-${c.id}`}
                     href={c.map_url}
@@ -249,18 +226,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 self-start sm:self-center">
-                  {whatsappHref(y.phone) && (
-                    <a
-                      data-testid={`yard-whatsapp-link-${y.id}`}
-                      href={whatsappHref(y.phone)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
-                    >
-                      <WhatsappLogo size={14} weight="bold" />
-                      {t("dashboard.whatsapp")}
-                    </a>
-                  )}
                   <a
                     data-testid={`yard-map-link-${y.id}`}
                     href={y.map_url}

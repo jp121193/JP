@@ -16,6 +16,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Callback set by AuthContext to handle a global "kicked out" event.
+let onForcedLogout = null;
+export function setForcedLogoutHandler(fn) {
+  onForcedLogout = fn;
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const detail = error?.response?.data?.detail;
+    // Ignore the initial /auth/me bootstrap (no token yet) and login/register failures.
+    const url = error?.config?.url || "";
+    const isAuthPost = url.includes("/auth/login") || url.includes("/auth/register");
+    if (status === 401 && !isAuthPost && localStorage.getItem("jp_token")) {
+      const reason = typeof detail === "string" ? detail : "Session ended";
+      if (onForcedLogout) onForcedLogout(reason);
+    }
+    return Promise.reject(error);
+  }
+);
+
 export function formatApiError(err) {
   const detail = err?.response?.data?.detail;
   if (detail == null) return err?.message || "Something went wrong";

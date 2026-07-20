@@ -43,10 +43,11 @@ def verify_password(pw: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def create_token(user_id: str, role: str) -> str:
+def create_token(user_id: str, role: str, session_id: str) -> str:
     payload = {
         "sub": user_id,
         "role": role,
+        "sid": session_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
         "iat": datetime.now(timezone.utc),
     }
@@ -105,7 +106,6 @@ class CeramicIn(BaseModel):
     name: str
     category: str
     map_url: str
-    phone: Optional[str] = None
 
 
 class CeramicOut(CeramicIn):
@@ -116,7 +116,6 @@ class YardIn(BaseModel):
     name: str
     port: Literal["Mundra", "Kandla"]
     map_url: str
-    phone: Optional[str] = None
 
 
 class YardOut(YardIn):
@@ -136,6 +135,10 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    token_sid = payload.get("sid")
+    active_sid = user.get("active_session_id")
+    if not token_sid or not active_sid or token_sid != active_sid:
+        raise HTTPException(status_code=401, detail="Signed in on another device")
     return user
 
 async def require_approved(user: dict = Depends(get_current_user)) -> dict:
@@ -157,6 +160,7 @@ async def register(payload: RegisterIn):
     existing = await db.users.find_one({"mobile": payload.mobile})
     if existing:
         raise HTTPException(status_code=400, detail="A user with this mobile number already exists")
+    session_id = str(uuid.uuid4())
     user_doc = {
         "id": str(uuid.uuid4()),
         "mobile": payload.mobile,
@@ -165,10 +169,11 @@ async def register(payload: RegisterIn):
         "role": "user",
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "active_session_id": session_id,
     }
     await db.users.insert_one(user_doc)
-    token = create_token(user_doc["id"], user_doc["role"])
-    user_out = {k: v for k, v in user_doc.items() if k not in ("password_hash", "_id")}
+    token = create_token(user_doc["id"], user_doc["role"], session_id)
+    user_out = {k: v for k, v in user_doc.items() if k not in ("password_hash", "_id", "active_session_id")}
     return {"token": token, "user": user_out}
 
 
@@ -178,10 +183,19 @@ async def login(payload: LoginIn):
     user = await db.users.find_one({"mobile": mobile})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid mobile number or password")
-    token = create_token(user["id"], user["role"])
+    session_id = str(uuid.uuid4())
+    await db.users.update_one({"id": user["id"]}, {"$set": {"active_session_id": session_id}})
+    token = create_token(user["id"], user["role"], session_id)
     user.pop("password_hash", None)
     user.pop("_id", None)
+    user.pop("active_session_id", None)
     return {"token": token, "user": user}
+
+
+@api_router.post("/auth/logout")
+async def logout(user: dict = Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"active_session_id": ""}})
+    return {"ok": True}
 
 
 @api_router.get("/auth/me")
@@ -315,11 +329,10 @@ async def admin_import_ceramics(file: UploadFile = File(...), _: dict = Depends(
         name = r.get("name") or r.get("company_name")
         category = r.get("category") or r.get("type")
         map_url = r.get("map_url") or r.get("location") or r.get("maps") or r.get("google_maps_link")
-        phone = r.get("phone") or r.get("whatsapp") or r.get("mobile") or None
         if not name or not category or not map_url:
             errors.append(f"Row {i}: missing name/category/map_url")
             continue
-        docs.append({"id": str(uuid.uuid4()), "name": name, "category": category, "map_url": map_url, "phone": phone})
+        docs.append({"id": str(uuid.uuid4()), "name": name, "category": category, "map_url": map_url})
         inserted += 1
     if docs:
         await db.ceramics.insert_many(docs)
@@ -337,11 +350,10 @@ async def admin_import_yards(file: UploadFile = File(...), _: dict = Depends(req
         name = r.get("name") or r.get("yard_name")
         port = (r.get("port") or r.get("port_location") or "").capitalize()
         map_url = r.get("map_url") or r.get("location") or r.get("maps") or r.get("google_maps_link")
-        phone = r.get("phone") or r.get("whatsapp") or r.get("mobile") or None
         if not name or port not in ("Mundra", "Kandla") or not map_url:
             errors.append(f"Row {i}: missing name / port must be Mundra or Kandla / missing map_url")
             continue
-        docs.append({"id": str(uuid.uuid4()), "name": name, "port": port, "map_url": map_url, "phone": phone})
+        docs.append({"id": str(uuid.uuid4()), "name": name, "port": port, "map_url": map_url})
         inserted += 1
     if docs:
         await db.yards.insert_many(docs)
@@ -355,20 +367,20 @@ async def root():
 
 # ---------- Seeding ----------
 SEED_CERAMICS = [
-    {"name": "Morvi Vitrified Tiles Co.", "category": "Vitrified Tiles", "phone": "+919825012301", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8173,70.8378,13z"},
-    {"name": "Sunrise Ceramics Pvt Ltd", "category": "Wall Tiles", "phone": "+919825012302", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8250,70.8300,14z"},
-    {"name": "Royal Sanitaryware", "category": "Sanitaryware", "phone": "+919825012303", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8100,70.8500,14z"},
-    {"name": "Diamond Floor Tiles", "category": "Floor Tiles", "phone": "+919825012304", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8200,70.8400,13z"},
-    {"name": "Regal Ceramic Industries", "category": "Polished Tiles", "phone": "+919825012305", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8150,70.8450,14z"},
+    {"name": "Morvi Vitrified Tiles Co.", "category": "Vitrified Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8173,70.8378,13z"},
+    {"name": "Sunrise Ceramics Pvt Ltd", "category": "Wall Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8250,70.8300,14z"},
+    {"name": "Royal Sanitaryware", "category": "Sanitaryware", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8100,70.8500,14z"},
+    {"name": "Diamond Floor Tiles", "category": "Floor Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8200,70.8400,13z"},
+    {"name": "Regal Ceramic Industries", "category": "Polished Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8150,70.8450,14z"},
 ]
 
 SEED_YARDS = [
-    {"name": "Adani Empty Yard - Mundra", "port": "Mundra", "phone": "+912836200001", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7440,69.7100,13z"},
-    {"name": "Gateway Distriparks - Mundra", "port": "Mundra", "phone": "+912836200002", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7500,69.7200,13z"},
-    {"name": "Concor CFS - Mundra", "port": "Mundra", "phone": "+912836200003", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7400,69.7300,13z"},
-    {"name": "Kandla Port ICD Yard", "port": "Kandla", "phone": "+912836300001", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0230,70.2200,13z"},
-    {"name": "Balaji Empty Container Depot", "port": "Kandla", "phone": "+912836300002", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0300,70.2100,13z"},
-    {"name": "Kandla CFS Terminal", "port": "Kandla", "phone": "+912836300003", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0180,70.2250,13z"},
+    {"name": "Adani Empty Yard - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7440,69.7100,13z"},
+    {"name": "Gateway Distriparks - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7500,69.7200,13z"},
+    {"name": "Concor CFS - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7400,69.7300,13z"},
+    {"name": "Kandla Port ICD Yard", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0230,70.2200,13z"},
+    {"name": "Balaji Empty Container Depot", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0300,70.2100,13z"},
+    {"name": "Kandla CFS Terminal", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0180,70.2250,13z"},
 ]
 
 
@@ -404,24 +416,14 @@ async def on_startup():
     if await db.ceramics.count_documents({}) == 0:
         docs = [{"id": str(uuid.uuid4()), **c} for c in SEED_CERAMICS]
         await db.ceramics.insert_many(docs)
-    else:
-        # Backfill missing phone numbers on seeded ceramics
-        for c in SEED_CERAMICS:
-            await db.ceramics.update_one(
-                {"name": c["name"], "$or": [{"phone": {"$exists": False}}, {"phone": None}, {"phone": ""}]},
-                {"$set": {"phone": c["phone"]}},
-            )
+    # Remove any legacy phone field from existing records
+    await db.ceramics.update_many({"phone": {"$exists": True}}, {"$unset": {"phone": ""}})
 
     # Seed yards if empty
     if await db.yards.count_documents({}) == 0:
         docs = [{"id": str(uuid.uuid4()), **y} for y in SEED_YARDS]
         await db.yards.insert_many(docs)
-    else:
-        for y in SEED_YARDS:
-            await db.yards.update_one(
-                {"name": y["name"], "$or": [{"phone": {"$exists": False}}, {"phone": None}, {"phone": ""}]},
-                {"$set": {"phone": y["phone"]}},
-            )
+    await db.yards.update_many({"phone": {"$exists": True}}, {"$unset": {"phone": ""}})
 
 
 @app.on_event("shutdown")

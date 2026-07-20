@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, formatApiError, setForcedLogoutHandler } from "@/lib/api";
+import { toast } from "sonner";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined); // undefined = loading, null = anon, obj = signed-in
+  const [user, setUser] = useState(undefined);
 
   const bootstrap = useCallback(async () => {
     const token = localStorage.getItem("jp_token");
@@ -24,6 +25,17 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     bootstrap();
   }, [bootstrap]);
+
+  // Wire the global 401 handler once
+  useEffect(() => {
+    setForcedLogoutHandler((reason) => {
+      localStorage.removeItem("jp_token");
+      setUser(null);
+      // Delay to let React finish current render
+      setTimeout(() => toast.error(reason || "Session ended"), 0);
+    });
+    return () => setForcedLogoutHandler(null);
+  }, []);
 
   const login = async (mobile, password) => {
     try {
@@ -47,7 +59,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {}
     localStorage.removeItem("jp_token");
     setUser(null);
   };
