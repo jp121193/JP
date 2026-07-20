@@ -331,15 +331,20 @@ export default function AdminPage() {
       toast.error(formatApiError(e));
     }
   };
-  const deleteYard = async (id) => {
-    if (!window.confirm("Delete this yard?")) return;
-    try {
-      await api.delete(`/admin/yards/${id}`);
-      toast.success("Deleted");
-      loadAll();
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
+  const deleteYard = (id, name) => {
+    askConfirm(
+      "Delete yard entry?",
+      `"${name}" will be removed from the directory.`,
+      async () => {
+        try {
+          await api.delete(`/admin/yards/${id}`);
+          toast.success("Deleted");
+          loadAll();
+        } catch (e) {
+          toast.error(formatApiError(e));
+        }
+      }
+    );
   };
 
   const pendingCount = users.filter((u) => u.status === "pending").length;
