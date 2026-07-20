@@ -224,6 +224,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [editingCeramic, setEditingCeramic] = useState(null); // "new" or object
   const [editingYard, setEditingYard] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { title, message, onConfirm }
+
+  const askConfirm = (title, message, onConfirm) =>
+    setConfirm({ title, message, onConfirm });
 
   const loadAll = async () => {
     setLoading(true);
@@ -265,15 +269,20 @@ export default function AdminPage() {
       toast.error(formatApiError(e));
     }
   };
-  const deleteUser = async (id) => {
-    if (!window.confirm("Delete this user?")) return;
-    try {
-      await api.delete(`/admin/users/${id}`);
-      toast.success("User deleted");
-      loadAll();
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
+  const deleteUser = (id, name) => {
+    askConfirm(
+      "Delete user?",
+      `Remove ${name} permanently. They will lose access immediately.`,
+      async () => {
+        try {
+          await api.delete(`/admin/users/${id}`);
+          toast.success("User deleted");
+          loadAll();
+        } catch (e) {
+          toast.error(formatApiError(e));
+        }
+      }
+    );
   };
 
   const saveCeramic = async (payload) => {
@@ -291,15 +300,20 @@ export default function AdminPage() {
       toast.error(formatApiError(e));
     }
   };
-  const deleteCeramic = async (id) => {
-    if (!window.confirm("Delete this ceramic?")) return;
-    try {
-      await api.delete(`/admin/ceramics/${id}`);
-      toast.success("Deleted");
-      loadAll();
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
+  const deleteCeramic = (id, name) => {
+    askConfirm(
+      "Delete ceramic entry?",
+      `"${name}" will be removed from the directory.`,
+      async () => {
+        try {
+          await api.delete(`/admin/ceramics/${id}`);
+          toast.success("Deleted");
+          loadAll();
+        } catch (e) {
+          toast.error(formatApiError(e));
+        }
+      }
+    );
   };
 
   const saveYard = async (payload) => {
@@ -436,7 +450,7 @@ export default function AdminPage() {
                       )}
                       <button
                         data-testid={`admin-delete-user-${u.id}`}
-                        onClick={() => deleteUser(u.id)}
+                        onClick={() => deleteUser(u.id, u.name)}
                         className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
                       >
                         <Trash size={14} weight="bold" />
@@ -517,7 +531,7 @@ export default function AdminPage() {
                         </button>
                         <button
                           data-testid={`admin-delete-ceramic-${c.id}`}
-                          onClick={() => deleteCeramic(c.id)}
+                          onClick={() => deleteCeramic(c.id, c.name)}
                           className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
                         >
                           <Trash size={14} weight="bold" />
@@ -596,7 +610,7 @@ export default function AdminPage() {
                         </button>
                         <button
                           data-testid={`admin-delete-yard-${y.id}`}
-                          onClick={() => deleteYard(y.id)}
+                          onClick={() => deleteYard(y.id, y.name)}
                           className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
                         >
                           <Trash size={14} weight="bold" />
@@ -610,6 +624,45 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {confirm && (
+        <div
+          data-testid="confirm-dialog"
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+        >
+          <div
+            className="absolute inset-0 bg-slate-900/60"
+            onClick={() => setConfirm(null)}
+          />
+          <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="label-eyebrow text-red-600 mb-2">Confirm</div>
+            <h3 className="font-display font-black text-2xl text-slate-900 mb-2">
+              {confirm.title}
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">{confirm.message}</p>
+            <div className="flex justify-end gap-2">
+              <button
+                data-testid="confirm-dialog-cancel"
+                onClick={() => setConfirm(null)}
+                className="h-10 px-4 rounded-full border border-slate-300 text-sm font-semibold hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                data-testid="confirm-dialog-confirm"
+                onClick={async () => {
+                  const fn = confirm.onConfirm;
+                  setConfirm(null);
+                  await fn();
+                }}
+                className="h-10 px-4 rounded-full bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

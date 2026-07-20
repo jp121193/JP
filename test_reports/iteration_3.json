@@ -1,0 +1,38 @@
+{
+  "summary": "Verified the delete-flow bug fix on /admin. Users and Ceramics delete now correctly use the new in-page ConfirmDialog (data-testid=confirm-dialog with confirm-dialog-confirm / confirm-dialog-cancel). Cancel button, backdrop overlay click, and successful delete all work as expected. HOWEVER Yards delete still uses window.confirm() (line 335 in AdminPage.jsx: `if (!window.confirm(...)) return;`) - this violates the requirement 'No window.confirm() usage remains anywhere in AdminPage' and reproduces the original user-reported bug for yards inside the preview iframe.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminPage.jsx - deleteYard (line 334-343)",
+        "issue": "`deleteYard` was NOT migrated to askConfirm/ConfirmDialog. It still calls `if (!window.confirm(\"Delete this yard?\")) return;`. In the preview iframe the native confirm is suppressed and the yard cannot be deleted. Only deleteUser and deleteCeramic were converted. Confirmed via runtime hook (window.confirm was called during delete-yard click and confirm-dialog did NOT appear).",
+        "selector": "[data-testid^=\"admin-delete-yard-\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "In /app/frontend/src/pages/AdminPage.jsx, replace the body of deleteYard (line ~334-343) with the same askConfirm pattern used by deleteUser / deleteCeramic. Example: `const deleteYard = (id, name) => askConfirm('Delete yard?', `\"${name}\" will be removed from the directory.`, async () => { try { await api.delete(`/admin/yards/${id}`); toast.success('Deleted'); loadAll(); } catch (e) { toast.error(formatApiError(e)); } });`",
+    "Also update the button in the yard row (line 613) to pass y.name: `onClick={() => deleteYard(y.id, y.name)}` (currently `deleteYard(y.id, y.name)` is already passing both args, so this signature change is safe)."
+  ],
+  "critical_code_review_comments": [
+    "AdminPage.jsx line 335 still has window.confirm - direct regression/miss versus the stated fix. This is the same class of bug the user reported ('unable to delete... yard field also').",
+    "Confirm dialog UX: on the actual confirm button the label is hard-coded to 'Delete' (line 660). Works for delete flows but if askConfirm is reused for non-destructive actions in future it will be misleading; consider making the confirm-button label a prop.",
+    "askConfirm currently awaits fn() after setConfirm(null) - fine, but if fn throws, the toast.error path is handled inside the individual handlers, so no double-close issue. Good.",
+    "No loading state on confirm-dialog-confirm while the DELETE request is in-flight - a fast double-click could fire two DELETEs. Consider disabling the button once clicked."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only)", "frontend": "2/3 delete flows passing (67%). User delete OK, Ceramic delete OK, Yard delete FAIL - still uses window.confirm"},
+  "test_credentials": "Admin mobile 9999999999 / password admin@JP2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created and cleaned up: user mobile 5555500099 (deleted via UI as part of test 1), ceramic 'TESTDELCeramic' (deleted via UI as part of test 2), yard 'TESTDELYard' (created for test 3, then cleaned via API DELETE since UI delete could not complete due to the bug).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent migrates deleteYard to askConfirm, re-run the same 3-scenario Playwright flow (login -> /admin -> users/ceramics/yards delete). Only Test 3 needs re-verification. Native window.confirm hook: `await page.add_init_script(\"window.__nativeConfirmCalled=false; window.confirm=(m)=>{window.__nativeConfirmCalled=true;return false;};\");` then after clicking admin-delete-yard-{id} assert `await page.is_visible('[data-testid=\"confirm-dialog\"]') == True` and `await page.evaluate('window.__nativeConfirmCalled') == False`.",
+  "rca of the issue": "The fix converted deleteUser (line 272) and deleteCeramic (line 303) to the new state-driven askConfirm() + ConfirmDialog modal, but the deleteYard function (line 334) was left untouched and still contains `if (!window.confirm('Delete this yard?')) return;`. Because the preview environment renders the app inside an iframe where native `window.confirm` is either blocked or auto-dismissed, the yard delete silently no-ops - exactly matching the original user complaint about the 'yard field' delete not working. Reproduction: login as admin -> /admin -> Yards tab -> click any trash button -> nothing happens (in real browser you'd see a native confirm; in preview iframe you see nothing). Mitigation: mirror the deleteCeramic pattern for yards - takes 8 lines."
+}
