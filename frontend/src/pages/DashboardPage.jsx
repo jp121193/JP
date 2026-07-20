@@ -1,0 +1,246 @@
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { api, formatApiError } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
+import PendingApprovalPage from "@/pages/PendingApprovalPage";
+import {
+  MagnifyingGlass,
+  MapPin,
+  Buildings,
+  Boat,
+  ArrowUpRight,
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+
+const TABS = [
+  { key: "ceramics", label: "Morvi Ceramics", icon: Buildings },
+  { key: "yards", label: "Container Yards", icon: Boat },
+];
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const [tab, setTab] = useState("ceramics");
+  const [query, setQuery] = useState("");
+  const [ceramics, setCeramics] = useState([]);
+  const [yards, setYards] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user?.status !== "approved" && user?.role !== "admin") return;
+    (async () => {
+      setLoading(true);
+      try {
+        const [c, y] = await Promise.all([api.get("/ceramics"), api.get("/yards")]);
+        setCeramics(c.data);
+        setYards(y.data);
+      } catch (e) {
+        toast.error(formatApiError(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [user]);
+
+  const filteredCeramics = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ceramics;
+    return ceramics.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q)
+    );
+  }, [ceramics, query]);
+
+  const filteredYards = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return yards;
+    return yards.filter(
+      (y) => y.name.toLowerCase().includes(q) || y.port.toLowerCase().includes(q)
+    );
+  }, [yards, query]);
+
+  if (user && user.status !== "approved" && user.role !== "admin") {
+    return <PendingApprovalPage />;
+  }
+
+  const total = tab === "ceramics" ? filteredCeramics.length : filteredYards.length;
+
+  return (
+    <div className="min-h-screen bg-white">
+      <AppHeader />
+
+      {/* Title band */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <div className="label-eyebrow text-blue-600 mb-2">Directory</div>
+          <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-slate-900 max-w-3xl">
+            Morvi ceramics &amp; container yards, in one operator's directory.
+          </h1>
+          <p className="text-slate-500 mt-3 max-w-2xl text-sm sm:text-base">
+            Curated for logistics teams working the Kutch corridor. Tap any pin to open on Google
+            Maps.
+          </p>
+        </div>
+      </section>
+
+      {/* Sticky search + tabs */}
+      <div
+        className="sticky top-14 z-30 bg-white border-b border-slate-200"
+        data-testid="dashboard-controls"
+      >
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="flex-1 flex items-center h-11 px-3 rounded-full border border-slate-300 bg-white focus-within:border-slate-900 transition-colors">
+            <MagnifyingGlass size={18} weight="bold" className="text-slate-400 mr-2" />
+            <input
+              data-testid="dashboard-search-input"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={
+                tab === "ceramics"
+                  ? "Search company or category..."
+                  : "Search yard name or port (Mundra / Kandla)..."
+              }
+              className="flex-1 bg-transparent outline-none text-sm text-slate-900 placeholder-slate-400"
+            />
+            {query && (
+              <button
+                data-testid="dashboard-search-clear"
+                onClick={() => setQuery("")}
+                className="text-xs text-slate-500 hover:text-slate-900 px-2"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div
+            className="flex items-center gap-1 p-1 rounded-full bg-slate-100"
+            role="tablist"
+          >
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  data-testid={`dashboard-tab-${t.key}`}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(t.key)}
+                  className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold transition-colors ${
+                    active
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon size={14} weight="bold" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* List */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="label-eyebrow">
+            {tab === "ceramics" ? "Ceramic manufacturers · Morvi" : "Empty container yards"}
+          </div>
+          <div className="text-xs font-mono-jp text-slate-500" data-testid="dashboard-result-count">
+            {loading ? "loading..." : `${total} result${total === 1 ? "" : "s"}`}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="py-16 text-center text-slate-400 label-eyebrow">Loading</div>
+        ) : tab === "ceramics" ? (
+          <ul className="divide-y divide-slate-200 border-t border-slate-200">
+            {filteredCeramics.map((c) => (
+              <li
+                key={c.id}
+                data-testid={`ceramic-row-${c.id}`}
+                className="row-line py-4 px-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-display font-bold text-slate-900 text-lg truncate">
+                    {c.name}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    <span className="inline-block px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 mr-2 label-eyebrow text-[0.65rem]">
+                      {c.category}
+                    </span>
+                    Morvi, Gujarat
+                  </div>
+                </div>
+                <a
+                  data-testid={`ceramic-map-link-${c.id}`}
+                  href={c.map_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 self-start sm:self-center h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                >
+                  <MapPin size={14} weight="bold" />
+                  Open in Maps
+                  <ArrowUpRight size={12} weight="bold" />
+                </a>
+              </li>
+            ))}
+            {filteredCeramics.length === 0 && (
+              <li className="py-12 text-center text-slate-400 label-eyebrow">
+                No matches
+              </li>
+            )}
+          </ul>
+        ) : (
+          <ul className="divide-y divide-slate-200 border-t border-slate-200">
+            {filteredYards.map((y) => (
+              <li
+                key={y.id}
+                data-testid={`yard-row-${y.id}`}
+                className="row-line py-4 px-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-display font-bold text-slate-900 text-lg truncate">
+                    {y.name}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full label-eyebrow text-[0.65rem] ${
+                        y.port === "Mundra"
+                          ? "bg-blue-50 text-blue-700 border border-blue-100"
+                          : "bg-amber-50 text-amber-700 border border-amber-100"
+                      }`}
+                    >
+                      Port · {y.port}
+                    </span>
+                    Empty container yard
+                  </div>
+                </div>
+                <a
+                  data-testid={`yard-map-link-${y.id}`}
+                  href={y.map_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 self-start sm:self-center h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                >
+                  <MapPin size={14} weight="bold" />
+                  Open in Maps
+                  <ArrowUpRight size={12} weight="bold" />
+                </a>
+              </li>
+            ))}
+            {filteredYards.length === 0 && (
+              <li className="py-12 text-center text-slate-400 label-eyebrow">
+                No matches
+              </li>
+            )}
+          </ul>
+        )}
+      </main>
+
+      <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-10 text-xs text-slate-400 font-mono-jp">
+        JP · Directory v1.0 · signed in as {user?.name}
+      </footer>
+    </div>
+  );
+}

@@ -1,0 +1,37 @@
+{
+  "summary": "Backend + frontend smoke test for JP directory. Admin login, JWT auth, RBAC, ceramics/yards seed data, admin CRUD, and admin UI all work. One HIGH bug: POST /api/auth/register returns 500 due to MongoDB ObjectId serialization (user IS created in DB, but token is not returned to client). This blocks the registration UX and prevents newly registered users from receiving a token to check pending status.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login admin -> 200 with token+user (role=admin, status=approved)",
+    "POST /api/auth/login wrong password -> 401",
+    "GET /api/auth/me returns user without password_hash",
+    "GET /api/ceramics as pending/unapproved -> 401/403 (blocked)",
+    "GET /api/ceramics as admin -> 5 seeded records with id/name/category/map_url",
+    "GET /api/yards as admin -> 6 records (3 Mundra + 3 Kandla)",
+    "Duplicate register mobile -> 400 with clear detail message",
+    "Non-admin calling /api/admin/* -> 401/403",
+    "Admin approves user -> subsequent GET /api/ceramics works (verified via UI status change to APPROVED)",
+    "Admin CRUD ceramics: POST/PUT/DELETE all 200",
+    "Admin CRUD yards: POST/PUT/DELETE all 200",
+    "Frontend admin login -> dashboard with 5 ceramics",
+    "Yards tab shows 6 yards; search 'kandla' filters to 3; search 'sanitaryware' filters ceramics to 1",
+    "Map link has target='_blank'",
+    "Admin panel shows Users/Ceramics/Yards sections; add-ceramic-btn and add-yard-btn appear on their tabs",
+    "Admin user row has NO Approve/Delete buttons (only non-admin users do)",
+    "Admin approve action works in UI - status transitions PENDING -> APPROVED with toast"
+  ],
+  "failed": [
+    {
+      "area": "Backend - POST /api/auth/register",
+      "issue": "500 Internal Server Error. Traceback: 'ObjectId object is not iterable' during FastAPI response serialization. The user document is inserted (duplicate re-register returns 400), but the endpoint returns the raw Mongo doc containing _id (ObjectId) instead of a Pydantic model / clean dict. Handler is likely returning the insert result rather than a User/token model.",
+      "evidence": "curl POST /api/auth/register -> 'Internal Server Error'; backend.err.log: ValueError: [TypeError(\"'ObjectId' object is not iterable\"), TypeError('vars() argument must have __dict__ attribute')] at fastapi/encoders.py:330. However subsequent duplicate register returns 400 confirming the user was created.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Fix POST /api/auth/register in /app/backend/server.py: return a properly serialized {token, user} response using the same UserPublic/AuthResponse model as /auth/login. Ensure the Mongo _id is stripped or not included, and use the Pydantic response_model on the route. This will restore the register flow and unblock the PendingApprovalPage frontend test."
+  ],
+  "success_rate": {"backend": "92%", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
