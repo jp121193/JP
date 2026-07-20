@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   UploadSimple,
   DownloadSimple,
+  DeviceMobile,
 } from "@phosphor-icons/react";
 
 function CeramicForm({ initial, onSave, onCancel }) {
@@ -307,6 +308,15 @@ export default function AdminPage() {
       toast.error(formatApiError(e));
     }
   };
+  const resetDevice = async (id) => {
+    try {
+      await api.post(`/admin/users/${id}/reset-device`);
+      toast.success(t("toast.deviceReset"));
+      loadAll();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
 
   const deleteUser = (id, name) => {
     askConfirm(
@@ -551,6 +561,19 @@ export default function AdminPage() {
                         : t("admin.status.pending")}
                     </span>
                     {u.role !== "admin" && (
+                      <span
+                        data-testid={`admin-user-device-${u.id}`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full label-eyebrow text-[0.6rem] ${
+                          u.device_bound
+                            ? "bg-blue-50 text-blue-700 border border-blue-100"
+                            : "bg-slate-50 text-slate-500 border border-slate-200"
+                        }`}
+                      >
+                        <DeviceMobile size={10} weight="bold" />
+                        {u.device_bound ? t("admin.device.bound") : t("admin.device.unbound")}
+                      </span>
+                    )}
+                    {u.role !== "admin" && (
                       <>
                         {u.status === "pending" ? (
                           <button
@@ -569,6 +592,16 @@ export default function AdminPage() {
                           >
                             <XCircle size={14} weight="bold" />
                             {t("admin.revoke")}
+                          </button>
+                        )}
+                        {u.device_bound && (
+                          <button
+                            data-testid={`admin-reset-device-${u.id}`}
+                            onClick={() => resetDevice(u.id)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors"
+                          >
+                            <DeviceMobile size={14} weight="bold" />
+                            {t("admin.resetDevice")}
                           </button>
                         )}
                         <button

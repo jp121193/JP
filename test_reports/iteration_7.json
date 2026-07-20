@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 7 validates the switch from single-device session invalidation to DEVICE BINDING with ADMIN EXEMPTION. Found and fixed one CRITICAL backend bug: create_token was emitting JWT claim 'sid' while get_current_user was reading 'did', so every non-admin token was immediately 401 on /auth/me. After the one-line fix (rename to 'did' with device_id parameter), all 11 backend pytest cases pass and all frontend UI flows pass (device_id in login body, jp_device_id persisted, admin multi-device tokens both work on /auth/me, non-admin dev-A bind then dev-B -> 403, admin reset-device unbinds, admin can't reset self -> 400, GET /admin/users returns device_bound bool without leaking bound_device_id, admin token has no did requirement, old user token becomes 401 with 'device is no longer registered' after reset). Frontend admin-user-device-{id} badge flips from 'Device bound' to 'No device' after clicking admin-reset-device-{id}, admin's own row shows no badge/reset, and axios 401 interceptor kicks stale-token user to /login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_device_binding.py",
+    "/app/test_reports/pytest/iteration_7_backend.xml"
+  ],
+  "action_items": [
+    "None required — the JWT claim rename ('sid' -> 'did') has been applied in /app/backend/server.py::create_token. Main agent should verify this hotfix is acceptable; it is a one-line rename that makes the previously-broken did check functional.",
+    "Optional cleanup (from iteration_6 code review, still valid): AppHeader.handleLogout should `await logout()` before nav('/login') so localStorage is cleared before route change.",
+    "Optional: The startup migration `$unset phone` on ceramics/yards can be removed once production DB is confirmed clean."
+  ],
+  "critical_code_review_comments": [
+    "FIXED — create_token in /app/backend/server.py was writing the JWT claim as 'sid' but get_current_user was reading 'did'. This meant every non-admin token was immediately rejected as 'device is no longer registered'. Renamed the claim to 'did' and renamed the parameter to device_id for clarity. Signature is now `create_token(user_id, role, device_id: Optional[str] = None)`.",
+    "Admin login passes device_id=None which JWT-encodes 'did': null. get_current_user short-circuits on role==admin BEFORE reading did, so this is fine. Consider omitting the claim entirely (via a small dict) for slightly smaller tokens, but functionally correct.",
+    "/api/auth/logout still requires a valid current token (get_current_user). For a non-admin whose device has been reset, calling logout returns 401. Frontend swallows it, but this could be made idempotent.",
+    "backend/pytest.ini forces `-n 2 --dist loadscope` by default; auth-heavy suites like this one must be run with `-n 0` to serialize. Documented and applied.",
+    "Admin's JWT is deterministic (payload same-second yields identical string). Two admin logins within the same second produce byte-identical tokens; test now sleeps 1.1s to force distinct strings. Not a functional issue but worth noting for consumers who assume unique tokens per login."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (JWT claim rename: sid -> did in create_token)",
+    "/app/backend/tests/test_device_binding.py (new pytest module, 11 tests)"
+  ],
+  "success_rate": {
+    "backend": "11/11 (100%)",
+    "frontend": "9/9 (100%)"
+  },
+  "test_credentials": "Admin 9999999999 / admin@JP2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "test_device_binding.py registers TEST_-named users with 666660XXXX mobile numbers; every fixture (function-scoped) cleans up via DELETE /api/admin/users/{id}. Playwright frontend test also deletes the TEST user it created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest for this project MUST use `-n 0` — pytest.ini defaults to `-n 2 --dist loadscope` which will race admin logins across xdist workers. Device binding flow: registration binds device_id, non-admin login rejects mismatched device with 403 detail exactly 'This account is already active on another device. Please ask the admin to reset your device.', admin has no did claim in JWT, POST /api/admin/users/{id}/reset-device $unsets bound_device_id and invalidates the outstanding user token (get_current_user check returns 401 with 'This device is no longer registered. Please sign in again.'). Frontend jp_device_id lives in localStorage as a uuidv4 (getDeviceId). Axios response interceptor calls onForcedLogout on any 401 (except /auth/login|register bootstrap) and clears jp_token.",
+  "rca of the issue": "ROOT CAUSE: /app/backend/server.py::create_token wrote payload key 'sid' (legacy from single-session-id design), while get_current_user was updated to read payload.get('did') for the new device-binding model. Every non-admin token had did=None at read-time, so the check `not token_did or ... != bound_did` always failed -> 401 'This device is no longer registered.'. REPRO: register a user -> use returned token on /auth/me -> 401 (should be 200). Login again with same device -> new token still 401. MITIGATION APPLIED: renamed the JWT payload key to 'did' in create_token; parameter name renamed to device_id for clarity. Verified: all 11 pytest cases now pass; end-to-end user register/login/me/reset flow works from the browser."
+}

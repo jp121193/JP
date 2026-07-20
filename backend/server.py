@@ -43,11 +43,11 @@ def verify_password(pw: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def create_token(user_id: str, role: str, session_id: str) -> str:
+def create_token(user_id: str, role: str, device_id: Optional[str] = None) -> str:
     payload = {
         "sub": user_id,
         "role": role,
-        "sid": session_id,
+        "did": device_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
         "iat": datetime.now(timezone.utc),
     }
@@ -62,6 +62,7 @@ class RegisterIn(BaseModel):
     mobile: str
     name: str
     password: str
+    device_id: str
 
     @field_validator("mobile")
     @classmethod
@@ -86,10 +87,27 @@ class RegisterIn(BaseModel):
             raise ValueError("Name is required")
         return v
 
+    @field_validator("device_id")
+    @classmethod
+    def _did(cls, v):
+        v = (v or "").strip()
+        if len(v) < 6:
+            raise ValueError("device_id is required")
+        return v
+
 
 class LoginIn(BaseModel):
     mobile: str
     password: str
+    device_id: str
+
+    @field_validator("device_id")
+    @classmethod
+    def _did(cls, v):
+        v = (v or "").strip()
+        if len(v) < 6:
+            raise ValueError("device_id is required")
+        return v
 
 
 class UserPublic(BaseModel):
@@ -135,10 +153,13 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    token_sid = payload.get("sid")
-    active_sid = user.get("active_session_id")
-    if not token_sid or not active_sid or token_sid != active_sid:
-        raise HTTPException(status_code=401, detail="Signed in on another device")
+    # Admin can use any device concurrently; skip device binding check
+    if user.get("role") == "admin":
+        return user
+    token_did = payload.get("did")
+    bound_did = user.get("bound_device_id")
+    if not token_did or not bound_did or token_did != bound_did:
+        raise HTTPException(status_code=401, detail="This device is no longer registered. Please sign in again.")
     return user
 
 async def require_approved(user: dict = Depends(get_current_user)) -> dict:
@@ -160,7 +181,6 @@ async def register(payload: RegisterIn):
     existing = await db.users.find_one({"mobile": payload.mobile})
     if existing:
         raise HTTPException(status_code=400, detail="A user with this mobile number already exists")
-    session_id = str(uuid.uuid4())
     user_doc = {
         "id": str(uuid.uuid4()),
         "mobile": payload.mobile,
@@ -169,11 +189,11 @@ async def register(payload: RegisterIn):
         "role": "user",
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "active_session_id": session_id,
+        "bound_device_id": payload.device_id,
     }
     await db.users.insert_one(user_doc)
-    token = create_token(user_doc["id"], user_doc["role"], session_id)
-    user_out = {k: v for k, v in user_doc.items() if k not in ("password_hash", "_id", "active_session_id")}
+    token = create_token(user_doc["id"], user_doc["role"], payload.device_id)
+    user_out = {k: v for k, v in user_doc.items() if k not in ("password_hash", "_id", "bound_device_id")}
     return {"token": token, "user": user_out}
 
 
@@ -183,18 +203,32 @@ async def login(payload: LoginIn):
     user = await db.users.find_one({"mobile": mobile})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid mobile number or password")
-    session_id = str(uuid.uuid4())
-    await db.users.update_one({"id": user["id"]}, {"$set": {"active_session_id": session_id}})
-    token = create_token(user["id"], user["role"], session_id)
+
+    role = user.get("role", "user")
+    if role == "admin":
+        # Admins can log in from unlimited devices; no binding
+        token = create_token(user["id"], role, None)
+    else:
+        bound = user.get("bound_device_id")
+        if bound and bound != payload.device_id:
+            raise HTTPException(
+                status_code=403,
+                detail="This account is already active on another device. Please ask the admin to reset your device.",
+            )
+        if not bound:
+            await db.users.update_one({"id": user["id"]}, {"$set": {"bound_device_id": payload.device_id}})
+        token = create_token(user["id"], role, payload.device_id)
+
     user.pop("password_hash", None)
     user.pop("_id", None)
+    user.pop("bound_device_id", None)
     user.pop("active_session_id", None)
     return {"token": token, "user": user}
 
 
 @api_router.post("/auth/logout")
 async def logout(user: dict = Depends(get_current_user)):
-    await db.users.update_one({"id": user["id"]}, {"$unset": {"active_session_id": ""}})
+    # Logout does NOT unbind the device - user can still log back in from same device
     return {"ok": True}
 
 
@@ -220,8 +254,22 @@ async def list_yards(_: dict = Depends(require_approved)):
 @api_router.get("/admin/users")
 async def admin_list_users(_: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    for u in users:
+        u["device_bound"] = bool(u.get("bound_device_id"))
+        u.pop("bound_device_id", None)
+        u.pop("active_session_id", None)
     users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
     return users
+
+
+@api_router.post("/admin/users/{user_id}/reset-device")
+async def admin_reset_device(user_id: str, admin: dict = Depends(require_admin)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Admin does not have device binding")
+    res = await db.users.update_one({"id": user_id}, {"$unset": {"bound_device_id": ""}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
 
 
 @api_router.post("/admin/users/{user_id}/approve")
