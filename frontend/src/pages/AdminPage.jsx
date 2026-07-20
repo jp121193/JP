@@ -494,7 +494,8 @@ export default function AdminPage() {
                           {c.name}
                         </div>
                         <div className="text-xs text-slate-500 mt-1">
-                          {c.category} ·{" "}
+                          {c.category}
+                          {c.phone && <> · <span className="font-mono-jp">{c.phone}</span></>} ·{" "}
                           <a
                             href={c.map_url}
                             target="_blank"
