@@ -1,9 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Buildings, SignOut, ShieldCheck, User } from "@phosphor-icons/react";
+import { useT } from "@/lib/i18n";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
+  const { t } = useT();
   const nav = useNavigate();
   const handleLogout = () => {
     logout();
@@ -23,10 +26,11 @@ export function AppHeader() {
           <Buildings size={22} weight="duotone" className="text-blue-600" />
           <span>JP</span>
           <span className="hidden sm:inline text-xs font-normal text-slate-500 ml-2 label-eyebrow">
-            Logistics & Ceramics Directory
+            {t("brand.subtitle")}
           </span>
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
+          <LanguageSwitch />
           {user?.role === "admin" && (
             <Link
               to="/admin"
@@ -34,11 +38,11 @@ export function AppHeader() {
               className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors"
             >
               <ShieldCheck size={16} weight="bold" />
-              Admin
+              {t("header.admin")}
             </Link>
           )}
           <div
-            className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 mr-2"
+            className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 mx-1"
             data-testid="header-user-info"
           >
             <User size={14} weight="bold" />
@@ -50,7 +54,7 @@ export function AppHeader() {
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors"
           >
             <SignOut size={16} weight="bold" />
-            Logout
+            {t("header.logout")}
           </button>
         </nav>
       </div>

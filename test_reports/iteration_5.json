@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only e2e testing for the two new features (i18n language toggle + bulk delete). All 40 assertions passed across Login/Register/Dashboard/Admin, bulk delete for Ceramics & Yards, admin-checkbox-disabled for Users bulk, cancel-preserves-selection, select-all toggle, and single-row delete regression.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: bulkDelete in AdminPage.jsx (lines 418-440) fires DELETE requests sequentially in a for-loop. For large selections (e.g., 100+ items) this will be slow. Consider Promise.all with concurrency limiting, or a backend batch endpoint /api/admin/{resource}/bulk-delete.",
+    "Minor: confirm dialog title uses t('confirm.bulkDelete.title', { n }) which renders '2 आइटम हटाएँ?' in HI - works, but plural form '{n} आइटम(s)' English key still says 'item(s)'. Consider en singular/plural like other results keys.",
+    "Minor: after bulk delete completes, the toast message uses t('toast.bulkDeleted') even when ok=0 and fail>0 the code hits toast.warning bulkPartial branch (looks correct). Verified only successful path; partial-failure path was not induced.",
+    "Minor (carry-over): confirm-dialog-confirm button label is hard-coded to t('confirm.delete') and not disabled during in-flight DELETE loop - a fast double-click on bulk-delete could re-trigger the loop. Consider disabling during onConfirm execution.",
+    "Minor: users-select-all excludes admin rows correctly (uses nonAdminUsers list); indeterminate state (some but not all selected) is not visually indicated - checkbox is only checked=true when ALL non-admin users are selected."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only per request)", "frontend": "40/40 assertions passed (100%)"},
+  "test_credentials": "Admin mobile 9999999999 / password admin@JP2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 3 ceramics 'TEST_BULK_CER_0..2' + 2 yards 'TEST_BULK_YARD_0..1' + 1 ceramic 'TEST_SINGLE_DEL' via /api/admin POST calls. ALL cleaned up: bulk-delete removed 2 ceramics + both yards; the 3rd ceramic was DELETE'd via API; TEST_SINGLE_DEL was removed via the single-delete UI test. No residual test data remains.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both new features (i18n toggle with jp_lang persistence in localStorage, and bulk delete for ceramics/yards/users with admin-excluded) are fully working. Confirm dialog is fully localized. If future iterations add more sections (e.g., cities, categories), reuse the same BulkBar/Checkbox pattern and add lang keys under admin.section.*, confirm.deleteX.* in /app/frontend/src/lib/i18n.jsx.",
+  "rca of the issue": "N/A - no bugs found."
+}

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, formatApiError } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import {
   CheckCircle,
   XCircle,
@@ -17,13 +18,8 @@ import {
   DownloadSimple,
 } from "@phosphor-icons/react";
 
-const SECTIONS = [
-  { key: "users", label: "Users", icon: UsersThree },
-  { key: "ceramics", label: "Ceramics", icon: Buildings },
-  { key: "yards", label: "Yards", icon: Boat },
-];
-
 function CeramicForm({ initial, onSave, onCancel }) {
+  const { t } = useT();
   const [name, setName] = useState(initial?.name || "");
   const [category, setCategory] = useState(initial?.category || "");
   const [mapUrl, setMapUrl] = useState(initial?.map_url || "");
@@ -33,28 +29,28 @@ function CeramicForm({ initial, onSave, onCancel }) {
       <input
         data-testid="ceramic-form-name"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm"
-        placeholder="Company name"
+        placeholder={t("form.name.ceramic")}
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
       <input
         data-testid="ceramic-form-category"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm"
-        placeholder="Category (e.g. Vitrified Tiles)"
+        placeholder={t("form.category")}
         value={category}
         onChange={(e) => setCategory(e.target.value)}
       />
       <input
         data-testid="ceramic-form-phone"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
-        placeholder="WhatsApp number (e.g. +919825012345)"
+        placeholder={t("form.phone.ceramic")}
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
       />
       <input
         data-testid="ceramic-form-map"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
-        placeholder="Google Maps URL"
+        placeholder={t("form.mapUrl")}
         value={mapUrl}
         onChange={(e) => setMapUrl(e.target.value)}
       />
@@ -64,14 +60,14 @@ function CeramicForm({ initial, onSave, onCancel }) {
           onClick={() => onSave({ name, category, map_url: mapUrl, phone: phone || null })}
           className="h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
         >
-          Save
+          {t("form.save")}
         </button>
         <button
           data-testid="ceramic-form-cancel"
           onClick={onCancel}
           className="h-9 px-4 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
         >
-          Cancel
+          {t("form.cancel")}
         </button>
       </div>
     </div>
@@ -79,6 +75,7 @@ function CeramicForm({ initial, onSave, onCancel }) {
 }
 
 function YardForm({ initial, onSave, onCancel }) {
+  const { t } = useT();
   const [name, setName] = useState(initial?.name || "");
   const [port, setPort] = useState(initial?.port || "Mundra");
   const [mapUrl, setMapUrl] = useState(initial?.map_url || "");
@@ -88,7 +85,7 @@ function YardForm({ initial, onSave, onCancel }) {
       <input
         data-testid="yard-form-name"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm"
-        placeholder="Yard name"
+        placeholder={t("form.name.yard")}
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
@@ -104,14 +101,14 @@ function YardForm({ initial, onSave, onCancel }) {
       <input
         data-testid="yard-form-phone"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
-        placeholder="WhatsApp number (e.g. +912836200001)"
+        placeholder={t("form.phone.yard")}
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
       />
       <input
         data-testid="yard-form-map"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
-        placeholder="Google Maps URL"
+        placeholder={t("form.mapUrl")}
         value={mapUrl}
         onChange={(e) => setMapUrl(e.target.value)}
       />
@@ -121,14 +118,14 @@ function YardForm({ initial, onSave, onCancel }) {
           onClick={() => onSave({ name, port, map_url: mapUrl, phone: phone || null })}
           className="h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
         >
-          Save
+          {t("form.save")}
         </button>
         <button
           data-testid="yard-form-cancel"
           onClick={onCancel}
           className="h-9 px-4 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
         >
-          Cancel
+          {t("form.cancel")}
         </button>
       </div>
     </div>
@@ -151,15 +148,16 @@ function downloadCsv(filename, content) {
 function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const { t } = useT();
 
   const onPick = () => inputRef.current?.click();
 
   const onFile = async (e) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting same file
+    e.target.value = "";
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      toast.error("Please choose a .csv file");
+      toast.error(t("toast.csvOnly"));
       return;
     }
     setBusy(true);
@@ -170,12 +168,18 @@ function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone
         headers: { "Content-Type": "multipart/form-data" },
       });
       const { inserted, errors } = data;
-      if (inserted > 0) toast.success(`Imported ${inserted} row${inserted === 1 ? "" : "s"}`);
+      if (inserted > 0) {
+        toast.success(
+          inserted === 1
+            ? t("toast.imported", { n: inserted })
+            : t("toast.imported.plural", { n: inserted })
+        );
+      }
       if (errors && errors.length > 0) {
-        toast.warning(`${errors.length} row(s) skipped. First: ${errors[0]}`);
+        toast.warning(t("toast.importSkipped", { n: errors.length, first: errors[0] }));
       }
       if (inserted === 0 && (!errors || errors.length === 0)) {
-        toast.info("Nothing to import");
+        toast.info(t("toast.importEmpty"));
       }
       onDone?.();
     } catch (err) {
@@ -193,7 +197,7 @@ function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone
         className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
       >
         <DownloadSimple size={14} weight="bold" />
-        Template
+        {t("admin.template")}
       </button>
       <button
         data-testid={`${testidPrefix}-import-btn`}
@@ -202,7 +206,7 @@ function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone
         className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 disabled:opacity-50 transition-colors"
       >
         <UploadSimple size={14} weight="bold" />
-        {busy ? "Uploading..." : "Import CSV"}
+        {busy ? t("admin.import.busy") : t("admin.import")}
       </button>
       <input
         ref={inputRef}
@@ -216,15 +220,65 @@ function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone
   );
 }
 
+function BulkBar({ testidPrefix, count, onDelete, onClear }) {
+  const { t } = useT();
+  if (count === 0) return null;
+  return (
+    <div
+      data-testid={`${testidPrefix}-bulk-bar`}
+      className="mb-3 flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg bg-slate-900 text-white"
+    >
+      <span className="text-xs font-semibold" data-testid={`${testidPrefix}-bulk-count`}>
+        {t("admin.selected", { n: count })}
+      </span>
+      <div className="flex-1" />
+      <button
+        data-testid={`${testidPrefix}-bulk-clear`}
+        onClick={onClear}
+        className="h-8 px-3 rounded-full text-xs font-semibold text-slate-200 hover:text-white transition-colors"
+      >
+        {t("admin.clearSelection")}
+      </button>
+      <button
+        data-testid={`${testidPrefix}-bulk-delete-btn`}
+        onClick={onDelete}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors"
+      >
+        <Trash size={14} weight="bold" />
+        {t("admin.deleteSelected")}
+      </button>
+    </div>
+  );
+}
+
+function Checkbox({ checked, onChange, testid, disabled }) {
+  return (
+    <input
+      type="checkbox"
+      data-testid={testid}
+      checked={!!checked}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.checked)}
+      className="h-4 w-4 rounded border-slate-300 accent-slate-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+    />
+  );
+}
+
 export default function AdminPage() {
+  const { t } = useT();
   const [section, setSection] = useState("users");
   const [users, setUsers] = useState([]);
   const [ceramics, setCeramics] = useState([]);
   const [yards, setYards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingCeramic, setEditingCeramic] = useState(null); // "new" or object
+  const [editingCeramic, setEditingCeramic] = useState(null);
   const [editingYard, setEditingYard] = useState(null);
-  const [confirm, setConfirm] = useState(null); // { title, message, onConfirm }
+  const [confirm, setConfirm] = useState(null);
+
+  // Selection state for bulk delete (per section)
+  const [selUsers, setSelUsers] = useState(() => new Set());
+  const [selCeramics, setSelCeramics] = useState(() => new Set());
+  const [selYards, setSelYards] = useState(() => new Set());
 
   const askConfirm = (title, message, onConfirm) =>
     setConfirm({ title, message, onConfirm });
@@ -254,7 +308,7 @@ export default function AdminPage() {
   const approve = async (id) => {
     try {
       await api.post(`/admin/users/${id}/approve`);
-      toast.success("User approved");
+      toast.success(t("toast.userApproved"));
       loadAll();
     } catch (e) {
       toast.error(formatApiError(e));
@@ -263,20 +317,21 @@ export default function AdminPage() {
   const revoke = async (id) => {
     try {
       await api.post(`/admin/users/${id}/revoke`);
-      toast.success("Access revoked");
+      toast.success(t("toast.accessRevoked"));
       loadAll();
     } catch (e) {
       toast.error(formatApiError(e));
     }
   };
+
   const deleteUser = (id, name) => {
     askConfirm(
-      "Delete user?",
-      `Remove ${name} permanently. They will lose access immediately.`,
+      t("confirm.deleteUser.title"),
+      t("confirm.deleteUser.body", { name }),
       async () => {
         try {
           await api.delete(`/admin/users/${id}`);
-          toast.success("User deleted");
+          toast.success(t("toast.userDeleted"));
           loadAll();
         } catch (e) {
           toast.error(formatApiError(e));
@@ -289,10 +344,10 @@ export default function AdminPage() {
     try {
       if (editingCeramic === "new") {
         await api.post("/admin/ceramics", payload);
-        toast.success("Ceramic added");
+        toast.success(t("toast.ceramicAdded"));
       } else {
         await api.put(`/admin/ceramics/${editingCeramic.id}`, payload);
-        toast.success("Ceramic updated");
+        toast.success(t("toast.ceramicUpdated"));
       }
       setEditingCeramic(null);
       loadAll();
@@ -302,12 +357,12 @@ export default function AdminPage() {
   };
   const deleteCeramic = (id, name) => {
     askConfirm(
-      "Delete ceramic entry?",
-      `"${name}" will be removed from the directory.`,
+      t("confirm.deleteCeramic.title"),
+      t("confirm.deleteCeramic.body", { name }),
       async () => {
         try {
           await api.delete(`/admin/ceramics/${id}`);
-          toast.success("Deleted");
+          toast.success(t("toast.deleted"));
           loadAll();
         } catch (e) {
           toast.error(formatApiError(e));
@@ -320,10 +375,10 @@ export default function AdminPage() {
     try {
       if (editingYard === "new") {
         await api.post("/admin/yards", payload);
-        toast.success("Yard added");
+        toast.success(t("toast.yardAdded"));
       } else {
         await api.put(`/admin/yards/${editingYard.id}`, payload);
-        toast.success("Yard updated");
+        toast.success(t("toast.yardUpdated"));
       }
       setEditingYard(null);
       loadAll();
@@ -333,12 +388,12 @@ export default function AdminPage() {
   };
   const deleteYard = (id, name) => {
     askConfirm(
-      "Delete yard entry?",
-      `"${name}" will be removed from the directory.`,
+      t("confirm.deleteYard.title"),
+      t("confirm.deleteYard.body", { name }),
       async () => {
         try {
           await api.delete(`/admin/yards/${id}`);
-          toast.success("Deleted");
+          toast.success(t("toast.deleted"));
           loadAll();
         } catch (e) {
           toast.error(formatApiError(e));
@@ -347,17 +402,61 @@ export default function AdminPage() {
     );
   };
 
+  // ---------- Bulk delete helpers ----------
+  const toggleSel = (setFn) => (id, checked) => {
+    setFn((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const toggleAll = (setFn, ids) => (checked) => {
+    setFn(() => (checked ? new Set(ids) : new Set()));
+  };
+
+  const bulkDelete = async (ids, urlBuilder, setSel) => {
+    if (ids.length === 0) return;
+    askConfirm(
+      t("confirm.bulkDelete.title", { n: ids.length }),
+      t("confirm.bulkDelete.body"),
+      async () => {
+        let ok = 0;
+        let fail = 0;
+        for (const id of ids) {
+          try {
+            await api.delete(urlBuilder(id));
+            ok += 1;
+          } catch {
+            fail += 1;
+          }
+        }
+        if (fail === 0) toast.success(t("toast.bulkDeleted", { n: ok }));
+        else toast.warning(t("toast.bulkPartial", { ok, fail }));
+        setSel(new Set());
+        loadAll();
+      }
+    );
+  };
+
   const pendingCount = users.filter((u) => u.status === "pending").length;
+  const nonAdminUsers = users.filter((u) => u.role !== "admin");
+
+  const SECTIONS = [
+    { key: "users", label: t("admin.section.users"), icon: UsersThree },
+    { key: "ceramics", label: t("admin.section.ceramics"), icon: Buildings },
+    { key: "yards", label: t("admin.section.yards"), icon: Boat },
+  ];
 
   return (
     <div className="min-h-screen bg-white">
       <AppHeader />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
-            <div className="label-eyebrow text-blue-600 mb-1">Admin console</div>
+            <div className="label-eyebrow text-blue-600 mb-1">{t("admin.eyebrow")}</div>
             <h1 className="font-display font-black text-3xl sm:text-4xl text-slate-900">
-              Manage JP.
+              {t("admin.title")}
             </h1>
           </div>
           <Link
@@ -366,7 +465,7 @@ export default function AdminPage() {
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
           >
             <ArrowLeft size={14} weight="bold" />
-            Back to directory
+            {t("admin.back")}
           </Link>
         </div>
 
@@ -400,72 +499,108 @@ export default function AdminPage() {
         </div>
 
         {loading ? (
-          <div className="py-16 text-center text-slate-400 label-eyebrow">Loading</div>
+          <div className="py-16 text-center text-slate-400 label-eyebrow">
+            {t("admin.loading")}
+          </div>
         ) : section === "users" ? (
-          <ul className="divide-y divide-slate-200 border-t border-slate-200">
-            {users.map((u) => (
-              <li
-                key={u.id}
-                data-testid={`admin-user-row-${u.id}`}
-                className="row-line py-4 px-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-display font-bold text-slate-900">
-                    {u.name}
-                    {u.role === "admin" && (
-                      <span className="ml-2 label-eyebrow text-blue-600 text-[0.6rem]">
-                        admin
-                      </span>
+          <div>
+            <BulkBar
+              testidPrefix="users"
+              count={selUsers.size}
+              onDelete={() =>
+                bulkDelete(
+                  Array.from(selUsers),
+                  (id) => `/admin/users/${id}`,
+                  setSelUsers
+                )
+              }
+              onClear={() => setSelUsers(new Set())}
+            />
+            <div className="flex items-center gap-3 py-2 px-2 border-b border-slate-200 text-xs text-slate-500">
+              <Checkbox
+                testid="users-select-all"
+                checked={
+                  nonAdminUsers.length > 0 &&
+                  nonAdminUsers.every((u) => selUsers.has(u.id))
+                }
+                onChange={toggleAll(setSelUsers, nonAdminUsers.map((u) => u.id))}
+                disabled={nonAdminUsers.length === 0}
+              />
+              <span className="label-eyebrow">
+                {t("admin.section.users")} · {users.length}
+              </span>
+            </div>
+            <ul className="divide-y divide-slate-200">
+              {users.map((u) => (
+                <li
+                  key={u.id}
+                  data-testid={`admin-user-row-${u.id}`}
+                  className="row-line py-4 px-2 flex items-center gap-3"
+                >
+                  <Checkbox
+                    testid={`users-check-${u.id}`}
+                    checked={selUsers.has(u.id)}
+                    onChange={(v) => toggleSel(setSelUsers)(u.id, v)}
+                    disabled={u.role === "admin"}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-display font-bold text-slate-900">
+                      {u.name}
+                      {u.role === "admin" && (
+                        <span className="ml-2 label-eyebrow text-blue-600 text-[0.6rem]">
+                          {t("admin.role.admin")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1 font-mono-jp">{u.mobile}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full label-eyebrow text-[0.6rem] ${
+                        u.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                          : "bg-amber-50 text-amber-700 border border-amber-100"
+                      }`}
+                    >
+                      {u.status === "approved"
+                        ? t("admin.status.approved")
+                        : t("admin.status.pending")}
+                    </span>
+                    {u.role !== "admin" && (
+                      <>
+                        {u.status === "pending" ? (
+                          <button
+                            data-testid={`admin-approve-${u.id}`}
+                            onClick={() => approve(u.id)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                          >
+                            <CheckCircle size={14} weight="bold" />
+                            {t("admin.approve")}
+                          </button>
+                        ) : (
+                          <button
+                            data-testid={`admin-revoke-${u.id}`}
+                            onClick={() => revoke(u.id)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
+                          >
+                            <XCircle size={14} weight="bold" />
+                            {t("admin.revoke")}
+                          </button>
+                        )}
+                        <button
+                          data-testid={`admin-delete-user-${u.id}`}
+                          onClick={() => deleteUser(u.id, u.name)}
+                          className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
+                        >
+                          <Trash size={14} weight="bold" />
+                        </button>
+                      </>
                     )}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1 font-mono-jp">
-                    {u.mobile}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-full label-eyebrow text-[0.6rem] ${
-                      u.status === "approved"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                        : "bg-amber-50 text-amber-700 border border-amber-100"
-                    }`}
-                  >
-                    {u.status}
-                  </span>
-                  {u.role !== "admin" && (
-                    <>
-                      {u.status === "pending" ? (
-                        <button
-                          data-testid={`admin-approve-${u.id}`}
-                          onClick={() => approve(u.id)}
-                          className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
-                        >
-                          <CheckCircle size={14} weight="bold" />
-                          Approve
-                        </button>
-                      ) : (
-                        <button
-                          data-testid={`admin-revoke-${u.id}`}
-                          onClick={() => revoke(u.id)}
-                          className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
-                        >
-                          <XCircle size={14} weight="bold" />
-                          Revoke
-                        </button>
-                      )}
-                      <button
-                        data-testid={`admin-delete-user-${u.id}`}
-                        onClick={() => deleteUser(u.id, u.name)}
-                        className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
-                      >
-                        <Trash size={14} weight="bold" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : section === "ceramics" ? (
           <div>
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
@@ -482,18 +617,38 @@ export default function AdminPage() {
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
               >
                 <Plus size={14} weight="bold" />
-                Add ceramic
+                {t("admin.add.ceramic")}
               </button>
             </div>
+            <BulkBar
+              testidPrefix="ceramics"
+              count={selCeramics.size}
+              onDelete={() =>
+                bulkDelete(
+                  Array.from(selCeramics),
+                  (id) => `/admin/ceramics/${id}`,
+                  setSelCeramics
+                )
+              }
+              onClear={() => setSelCeramics(new Set())}
+            />
             {editingCeramic === "new" && (
               <div className="mb-4">
-                <CeramicForm
-                  onSave={saveCeramic}
-                  onCancel={() => setEditingCeramic(null)}
-                />
+                <CeramicForm onSave={saveCeramic} onCancel={() => setEditingCeramic(null)} />
               </div>
             )}
-            <ul className="divide-y divide-slate-200 border-t border-slate-200">
+            <div className="flex items-center gap-3 py-2 px-2 border-b border-slate-200 text-xs text-slate-500">
+              <Checkbox
+                testid="ceramics-select-all"
+                checked={ceramics.length > 0 && ceramics.every((c) => selCeramics.has(c.id))}
+                onChange={toggleAll(setSelCeramics, ceramics.map((c) => c.id))}
+                disabled={ceramics.length === 0}
+              />
+              <span className="label-eyebrow">
+                {t("admin.section.ceramics")} · {ceramics.length}
+              </span>
+            </div>
+            <ul className="divide-y divide-slate-200">
               {ceramics.map((c) => (
                 <li
                   key={c.id}
@@ -507,11 +662,14 @@ export default function AdminPage() {
                       onCancel={() => setEditingCeramic(null)}
                     />
                   ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-display font-bold text-slate-900">
-                          {c.name}
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        testid={`ceramics-check-${c.id}`}
+                        checked={selCeramics.has(c.id)}
+                        onChange={(v) => toggleSel(setSelCeramics)(c.id, v)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display font-bold text-slate-900">{c.name}</div>
                         <div className="text-xs text-slate-500 mt-1">
                           {c.category}
                           {c.phone && <> · <span className="font-mono-jp">{c.phone}</span></>} ·{" "}
@@ -532,7 +690,7 @@ export default function AdminPage() {
                           className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
                         >
                           <PencilSimple size={14} weight="bold" />
-                          Edit
+                          {t("admin.edit")}
                         </button>
                         <button
                           data-testid={`admin-delete-ceramic-${c.id}`}
@@ -564,15 +722,38 @@ export default function AdminPage() {
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
               >
                 <Plus size={14} weight="bold" />
-                Add yard
+                {t("admin.add.yard")}
               </button>
             </div>
+            <BulkBar
+              testidPrefix="yards"
+              count={selYards.size}
+              onDelete={() =>
+                bulkDelete(
+                  Array.from(selYards),
+                  (id) => `/admin/yards/${id}`,
+                  setSelYards
+                )
+              }
+              onClear={() => setSelYards(new Set())}
+            />
             {editingYard === "new" && (
               <div className="mb-4">
                 <YardForm onSave={saveYard} onCancel={() => setEditingYard(null)} />
               </div>
             )}
-            <ul className="divide-y divide-slate-200 border-t border-slate-200">
+            <div className="flex items-center gap-3 py-2 px-2 border-b border-slate-200 text-xs text-slate-500">
+              <Checkbox
+                testid="yards-select-all"
+                checked={yards.length > 0 && yards.every((y) => selYards.has(y.id))}
+                onChange={toggleAll(setSelYards, yards.map((y) => y.id))}
+                disabled={yards.length === 0}
+              />
+              <span className="label-eyebrow">
+                {t("admin.section.yards")} · {yards.length}
+              </span>
+            </div>
+            <ul className="divide-y divide-slate-200">
               {yards.map((y) => (
                 <li
                   key={y.id}
@@ -586,13 +767,16 @@ export default function AdminPage() {
                       onCancel={() => setEditingYard(null)}
                     />
                   ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-display font-bold text-slate-900">
-                          {y.name}
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        testid={`yards-check-${y.id}`}
+                        checked={selYards.has(y.id)}
+                        onChange={(v) => toggleSel(setSelYards)(y.id, v)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display font-bold text-slate-900">{y.name}</div>
                         <div className="text-xs text-slate-500 mt-1">
-                          Port · {y.port}
+                          {t("dashboard.port", { port: y.port })}
                           {y.phone && <> · <span className="font-mono-jp">{y.phone}</span></>} ·{" "}
                           <a
                             href={y.map_url}
@@ -611,7 +795,7 @@ export default function AdminPage() {
                           className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-slate-300 text-xs font-semibold hover:bg-slate-100 transition-colors"
                         >
                           <PencilSimple size={14} weight="bold" />
-                          Edit
+                          {t("admin.edit")}
                         </button>
                         <button
                           data-testid={`admin-delete-yard-${y.id}`}
@@ -640,7 +824,7 @@ export default function AdminPage() {
             onClick={() => setConfirm(null)}
           />
           <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md p-6">
-            <div className="label-eyebrow text-red-600 mb-2">Confirm</div>
+            <div className="label-eyebrow text-red-600 mb-2">{t("confirm.eyebrow")}</div>
             <h3 className="font-display font-black text-2xl text-slate-900 mb-2">
               {confirm.title}
             </h3>
@@ -651,7 +835,7 @@ export default function AdminPage() {
                 onClick={() => setConfirm(null)}
                 className="h-10 px-4 rounded-full border border-slate-300 text-sm font-semibold hover:bg-slate-100 transition-colors"
               >
-                Cancel
+                {t("confirm.cancel")}
               </button>
               <button
                 data-testid="confirm-dialog-confirm"
@@ -662,7 +846,7 @@ export default function AdminPage() {
                 }}
                 className="h-10 px-4 rounded-full bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
               >
-                Delete
+                {t("confirm.delete")}
               </button>
             </div>
           </div>

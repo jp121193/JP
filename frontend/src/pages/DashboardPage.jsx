@@ -12,23 +12,19 @@ import {
   WhatsappLogo,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-
-const TABS = [
-  { key: "ceramics", label: "Morvi Ceramics", icon: Buildings },
-  { key: "yards", label: "Container Yards", icon: Boat },
-];
+import { useT } from "@/lib/i18n";
 
 function whatsappHref(phone) {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, "");
   if (!digits) return null;
-  // If number is 10 digits (bare Indian mobile), prefix 91
   const withCC = digits.length === 10 ? `91${digits}` : digits;
   return `https://wa.me/${withCC}`;
 }
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { t } = useT();
   const [tab, setTab] = useState("ceramics");
   const [query, setQuery] = useState("");
   const [ceramics, setCeramics] = useState([]);
@@ -78,26 +74,30 @@ export default function DashboardPage() {
   }
 
   const total = tab === "ceramics" ? filteredCeramics.length : filteredYards.length;
+  const resultsText =
+    total === 1 ? t("dashboard.results", { n: total }) : t("dashboard.results.plural", { n: total });
+
+  const TABS = [
+    { key: "ceramics", label: t("dashboard.tab.ceramics"), icon: Buildings },
+    { key: "yards", label: t("dashboard.tab.yards"), icon: Boat },
+  ];
 
   return (
     <div className="min-h-screen bg-white">
       <AppHeader />
 
-      {/* Title band */}
       <section className="border-b border-slate-200 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          <div className="label-eyebrow text-blue-600 mb-2">Directory</div>
+          <div className="label-eyebrow text-blue-600 mb-2">{t("dashboard.eyebrow")}</div>
           <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-slate-900 max-w-3xl">
-            Morvi ceramics &amp; container yards, in one operator's directory.
+            {t("dashboard.title")}
           </h1>
           <p className="text-slate-500 mt-3 max-w-2xl text-sm sm:text-base">
-            Curated for logistics teams working the Kutch corridor. Tap any pin to open on Google
-            Maps.
+            {t("dashboard.subtitle")}
           </p>
         </div>
       </section>
 
-      {/* Sticky search + tabs */}
       <div
         className="sticky top-14 z-30 bg-white border-b border-slate-200"
         data-testid="dashboard-controls"
@@ -111,8 +111,8 @@ export default function DashboardPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={
                 tab === "ceramics"
-                  ? "Search company or category..."
-                  : "Search yard name or port (Mundra / Kandla)..."
+                  ? t("dashboard.search.ceramics")
+                  : t("dashboard.search.yards")
               }
               className="flex-1 bg-transparent outline-none text-sm text-slate-900 placeholder-slate-400"
             />
@@ -122,7 +122,7 @@ export default function DashboardPage() {
                 onClick={() => setQuery("")}
                 className="text-xs text-slate-500 hover:text-slate-900 px-2"
               >
-                Clear
+                {t("dashboard.search.clear")}
               </button>
             )}
           </div>
@@ -130,16 +130,16 @@ export default function DashboardPage() {
             className="flex items-center gap-1 p-1 rounded-full bg-slate-100"
             role="tablist"
           >
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.key;
+            {TABS.map((tab_) => {
+              const Icon = tab_.icon;
+              const active = tab === tab_.key;
               return (
                 <button
-                  key={t.key}
-                  data-testid={`dashboard-tab-${t.key}`}
+                  key={tab_.key}
+                  data-testid={`dashboard-tab-${tab_.key}`}
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setTab(t.key)}
+                  onClick={() => setTab(tab_.key)}
                   className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold transition-colors ${
                     active
                       ? "bg-slate-900 text-white"
@@ -147,7 +147,7 @@ export default function DashboardPage() {
                   }`}
                 >
                   <Icon size={14} weight="bold" />
-                  {t.label}
+                  {tab_.label}
                 </button>
               );
             })}
@@ -155,19 +155,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* List */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-4">
           <div className="label-eyebrow">
-            {tab === "ceramics" ? "Ceramic manufacturers · Morvi" : "Empty container yards"}
+            {tab === "ceramics"
+              ? t("dashboard.section.ceramics")
+              : t("dashboard.section.yards")}
           </div>
           <div className="text-xs font-mono-jp text-slate-500" data-testid="dashboard-result-count">
-            {loading ? "loading..." : `${total} result${total === 1 ? "" : "s"}`}
+            {loading ? t("dashboard.loading") : resultsText}
           </div>
         </div>
 
         {loading ? (
-          <div className="py-16 text-center text-slate-400 label-eyebrow">Loading</div>
+          <div className="py-16 text-center text-slate-400 label-eyebrow">
+            {t("dashboard.loading")}
+          </div>
         ) : tab === "ceramics" ? (
           <ul className="divide-y divide-slate-200 border-t border-slate-200">
             {filteredCeramics.map((c) => (
@@ -184,7 +187,7 @@ export default function DashboardPage() {
                     <span className="inline-block px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 mr-2 label-eyebrow text-[0.65rem]">
                       {c.category}
                     </span>
-                    Morvi, Gujarat
+                    {t("dashboard.location")}
                   </div>
                 </div>
                 <div className="flex gap-2 self-start sm:self-center">
@@ -197,7 +200,7 @@ export default function DashboardPage() {
                       className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
                     >
                       <WhatsappLogo size={14} weight="bold" />
-                      WhatsApp
+                      {t("dashboard.whatsapp")}
                     </a>
                   )}
                   <a
@@ -208,7 +211,7 @@ export default function DashboardPage() {
                     className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
                   >
                     <MapPin size={14} weight="bold" />
-                    Open in Maps
+                    {t("dashboard.maps")}
                     <ArrowUpRight size={12} weight="bold" />
                   </a>
                 </div>
@@ -216,7 +219,7 @@ export default function DashboardPage() {
             ))}
             {filteredCeramics.length === 0 && (
               <li className="py-12 text-center text-slate-400 label-eyebrow">
-                No matches
+                {t("dashboard.empty")}
               </li>
             )}
           </ul>
@@ -240,9 +243,9 @@ export default function DashboardPage() {
                           : "bg-amber-50 text-amber-700 border border-amber-100"
                       }`}
                     >
-                      Port · {y.port}
+                      {t("dashboard.port", { port: y.port })}
                     </span>
-                    Empty container yard
+                    {t("dashboard.yardType")}
                   </div>
                 </div>
                 <div className="flex gap-2 self-start sm:self-center">
@@ -255,7 +258,7 @@ export default function DashboardPage() {
                       className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
                     >
                       <WhatsappLogo size={14} weight="bold" />
-                      WhatsApp
+                      {t("dashboard.whatsapp")}
                     </a>
                   )}
                   <a
@@ -266,7 +269,7 @@ export default function DashboardPage() {
                     className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
                   >
                     <MapPin size={14} weight="bold" />
-                    Open in Maps
+                    {t("dashboard.maps")}
                     <ArrowUpRight size={12} weight="bold" />
                   </a>
                 </div>
@@ -274,7 +277,7 @@ export default function DashboardPage() {
             ))}
             {filteredYards.length === 0 && (
               <li className="py-12 text-center text-slate-400 label-eyebrow">
-                No matches
+                {t("dashboard.empty")}
               </li>
             )}
           </ul>
@@ -282,7 +285,7 @@ export default function DashboardPage() {
       </main>
 
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-10 text-xs text-slate-400 font-mono-jp">
-        JP · Directory v1.0 · signed in as {user?.name}
+        {t("dashboard.footer", { name: user?.name })}
       </footer>
     </div>
   );
