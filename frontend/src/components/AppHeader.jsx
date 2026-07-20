@@ -8,8 +8,8 @@ export function AppHeader() {
   const { user, logout } = useAuth();
   const { t } = useT();
   const nav = useNavigate();
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     nav("/login");
   };
   return (
