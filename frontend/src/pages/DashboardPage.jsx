@@ -9,6 +9,7 @@ import {
   Buildings,
   Boat,
   ArrowUpRight,
+  WhatsappLogo,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -16,6 +17,15 @@ const TABS = [
   { key: "ceramics", label: "Morvi Ceramics", icon: Buildings },
   { key: "yards", label: "Container Yards", icon: Boat },
 ];
+
+function whatsappHref(phone) {
+  if (!phone) return null;
+  const digits = String(phone).replace(/\D/g, "");
+  if (!digits) return null;
+  // If number is 10 digits (bare Indian mobile), prefix 91
+  const withCC = digits.length === 10 ? `91${digits}` : digits;
+  return `https://wa.me/${withCC}`;
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -46,7 +56,9 @@ export default function DashboardPage() {
     if (!q) return ceramics;
     return ceramics.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q)
+        c.name.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        (c.phone || "").toLowerCase().includes(q)
     );
   }, [ceramics, query]);
 
@@ -54,7 +66,10 @@ export default function DashboardPage() {
     const q = query.trim().toLowerCase();
     if (!q) return yards;
     return yards.filter(
-      (y) => y.name.toLowerCase().includes(q) || y.port.toLowerCase().includes(q)
+      (y) =>
+        y.name.toLowerCase().includes(q) ||
+        y.port.toLowerCase().includes(q) ||
+        (y.phone || "").toLowerCase().includes(q)
     );
   }, [yards, query]);
 
@@ -172,17 +187,31 @@ export default function DashboardPage() {
                     Morvi, Gujarat
                   </div>
                 </div>
-                <a
-                  data-testid={`ceramic-map-link-${c.id}`}
-                  href={c.map_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 self-start sm:self-center h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
-                >
-                  <MapPin size={14} weight="bold" />
-                  Open in Maps
-                  <ArrowUpRight size={12} weight="bold" />
-                </a>
+                <div className="flex gap-2 self-start sm:self-center">
+                  {whatsappHref(c.phone) && (
+                    <a
+                      data-testid={`ceramic-whatsapp-link-${c.id}`}
+                      href={whatsappHref(c.phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
+                    >
+                      <WhatsappLogo size={14} weight="bold" />
+                      WhatsApp
+                    </a>
+                  )}
+                  <a
+                    data-testid={`ceramic-map-link-${c.id}`}
+                    href={c.map_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                  >
+                    <MapPin size={14} weight="bold" />
+                    Open in Maps
+                    <ArrowUpRight size={12} weight="bold" />
+                  </a>
+                </div>
               </li>
             ))}
             {filteredCeramics.length === 0 && (
@@ -216,17 +245,31 @@ export default function DashboardPage() {
                     Empty container yard
                   </div>
                 </div>
-                <a
-                  data-testid={`yard-map-link-${y.id}`}
-                  href={y.map_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 self-start sm:self-center h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
-                >
-                  <MapPin size={14} weight="bold" />
-                  Open in Maps
-                  <ArrowUpRight size={12} weight="bold" />
-                </a>
+                <div className="flex gap-2 self-start sm:self-center">
+                  {whatsappHref(y.phone) && (
+                    <a
+                      data-testid={`yard-whatsapp-link-${y.id}`}
+                      href={whatsappHref(y.phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors"
+                    >
+                      <WhatsappLogo size={14} weight="bold" />
+                      WhatsApp
+                    </a>
+                  )}
+                  <a
+                    data-testid={`yard-map-link-${y.id}`}
+                    href={y.map_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                  >
+                    <MapPin size={14} weight="bold" />
+                    Open in Maps
+                    <ArrowUpRight size={12} weight="bold" />
+                  </a>
+                </div>
               </li>
             ))}
             {filteredYards.length === 0 && (

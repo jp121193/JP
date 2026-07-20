@@ -12,11 +12,13 @@ import jwt as pyjwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+import csv
+import io
 
 # ---------- Config ----------
 mongo_url = os.environ['MONGO_URL']
@@ -103,6 +105,7 @@ class CeramicIn(BaseModel):
     name: str
     category: str
     map_url: str
+    phone: Optional[str] = None
 
 
 class CeramicOut(CeramicIn):
@@ -113,6 +116,7 @@ class YardIn(BaseModel):
     name: str
     port: Literal["Mundra", "Kandla"]
     map_url: str
+    phone: Optional[str] = None
 
 
 class YardOut(YardIn):
@@ -164,10 +168,8 @@ async def register(payload: RegisterIn):
     }
     await db.users.insert_one(user_doc)
     token = create_token(user_doc["id"], user_doc["role"])
-    return {
-        "token": token,
-        "user": {k: v for k, v in user_doc.items() if k != "password_hash"},
-    }
+    user_out = {k: v for k, v in user_doc.items() if k not in ("password_hash", "_id")}
+    return {"token": token, "user": user_out}
 
 
 @api_router.post("/auth/login")
@@ -286,6 +288,66 @@ async def admin_delete_yard(item_id: str, _: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+# ---------- Bulk CSV Import ----------
+def _parse_csv(file_bytes: bytes) -> List[dict]:
+    text = file_bytes.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    rows = []
+    for r in reader:
+        clean = {}
+        for k, v in r.items():
+            if k is None:
+                continue
+            key = k.strip().lower().replace(" ", "_")
+            clean[key] = (v or "").strip()
+        rows.append(clean)
+    return rows
+
+
+@api_router.post("/admin/ceramics/import")
+async def admin_import_ceramics(file: UploadFile = File(...), _: dict = Depends(require_admin)):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+    rows = _parse_csv(await file.read())
+    inserted, errors = 0, []
+    docs = []
+    for i, r in enumerate(rows, start=2):  # header is line 1
+        name = r.get("name") or r.get("company_name")
+        category = r.get("category") or r.get("type")
+        map_url = r.get("map_url") or r.get("location") or r.get("maps") or r.get("google_maps_link")
+        phone = r.get("phone") or r.get("whatsapp") or r.get("mobile") or None
+        if not name or not category or not map_url:
+            errors.append(f"Row {i}: missing name/category/map_url")
+            continue
+        docs.append({"id": str(uuid.uuid4()), "name": name, "category": category, "map_url": map_url, "phone": phone})
+        inserted += 1
+    if docs:
+        await db.ceramics.insert_many(docs)
+    return {"inserted": inserted, "errors": errors}
+
+
+@api_router.post("/admin/yards/import")
+async def admin_import_yards(file: UploadFile = File(...), _: dict = Depends(require_admin)):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+    rows = _parse_csv(await file.read())
+    inserted, errors = 0, []
+    docs = []
+    for i, r in enumerate(rows, start=2):
+        name = r.get("name") or r.get("yard_name")
+        port = (r.get("port") or r.get("port_location") or "").capitalize()
+        map_url = r.get("map_url") or r.get("location") or r.get("maps") or r.get("google_maps_link")
+        phone = r.get("phone") or r.get("whatsapp") or r.get("mobile") or None
+        if not name or port not in ("Mundra", "Kandla") or not map_url:
+            errors.append(f"Row {i}: missing name / port must be Mundra or Kandla / missing map_url")
+            continue
+        docs.append({"id": str(uuid.uuid4()), "name": name, "port": port, "map_url": map_url, "phone": phone})
+        inserted += 1
+    if docs:
+        await db.yards.insert_many(docs)
+    return {"inserted": inserted, "errors": errors}
+
+
 @api_router.get("/")
 async def root():
     return {"service": "JP Directory API", "status": "ok"}
@@ -293,20 +355,20 @@ async def root():
 
 # ---------- Seeding ----------
 SEED_CERAMICS = [
-    {"name": "Morvi Vitrified Tiles Co.", "category": "Vitrified Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8173,70.8378,13z"},
-    {"name": "Sunrise Ceramics Pvt Ltd", "category": "Wall Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8250,70.8300,14z"},
-    {"name": "Royal Sanitaryware", "category": "Sanitaryware", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8100,70.8500,14z"},
-    {"name": "Diamond Floor Tiles", "category": "Floor Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8200,70.8400,13z"},
-    {"name": "Regal Ceramic Industries", "category": "Polished Tiles", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8150,70.8450,14z"},
+    {"name": "Morvi Vitrified Tiles Co.", "category": "Vitrified Tiles", "phone": "+919825012301", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8173,70.8378,13z"},
+    {"name": "Sunrise Ceramics Pvt Ltd", "category": "Wall Tiles", "phone": "+919825012302", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8250,70.8300,14z"},
+    {"name": "Royal Sanitaryware", "category": "Sanitaryware", "phone": "+919825012303", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8100,70.8500,14z"},
+    {"name": "Diamond Floor Tiles", "category": "Floor Tiles", "phone": "+919825012304", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8200,70.8400,13z"},
+    {"name": "Regal Ceramic Industries", "category": "Polished Tiles", "phone": "+919825012305", "map_url": "https://www.google.com/maps/place/Morbi,+Gujarat/@22.8150,70.8450,14z"},
 ]
 
 SEED_YARDS = [
-    {"name": "Adani Empty Yard - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7440,69.7100,13z"},
-    {"name": "Gateway Distriparks - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7500,69.7200,13z"},
-    {"name": "Concor CFS - Mundra", "port": "Mundra", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7400,69.7300,13z"},
-    {"name": "Kandla Port ICD Yard", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0230,70.2200,13z"},
-    {"name": "Balaji Empty Container Depot", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0300,70.2100,13z"},
-    {"name": "Kandla CFS Terminal", "port": "Kandla", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0180,70.2250,13z"},
+    {"name": "Adani Empty Yard - Mundra", "port": "Mundra", "phone": "+912836200001", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7440,69.7100,13z"},
+    {"name": "Gateway Distriparks - Mundra", "port": "Mundra", "phone": "+912836200002", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7500,69.7200,13z"},
+    {"name": "Concor CFS - Mundra", "port": "Mundra", "phone": "+912836200003", "map_url": "https://www.google.com/maps/place/Mundra+Port/@22.7400,69.7300,13z"},
+    {"name": "Kandla Port ICD Yard", "port": "Kandla", "phone": "+912836300001", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0230,70.2200,13z"},
+    {"name": "Balaji Empty Container Depot", "port": "Kandla", "phone": "+912836300002", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0300,70.2100,13z"},
+    {"name": "Kandla CFS Terminal", "port": "Kandla", "phone": "+912836300003", "map_url": "https://www.google.com/maps/place/Kandla+Port/@23.0180,70.2250,13z"},
 ]
 
 
@@ -342,11 +404,24 @@ async def on_startup():
     if await db.ceramics.count_documents({}) == 0:
         docs = [{"id": str(uuid.uuid4()), **c} for c in SEED_CERAMICS]
         await db.ceramics.insert_many(docs)
+    else:
+        # Backfill missing phone numbers on seeded ceramics
+        for c in SEED_CERAMICS:
+            await db.ceramics.update_one(
+                {"name": c["name"], "$or": [{"phone": {"$exists": False}}, {"phone": None}, {"phone": ""}]},
+                {"$set": {"phone": c["phone"]}},
+            )
 
     # Seed yards if empty
     if await db.yards.count_documents({}) == 0:
         docs = [{"id": str(uuid.uuid4()), **y} for y in SEED_YARDS]
         await db.yards.insert_many(docs)
+    else:
+        for y in SEED_YARDS:
+            await db.yards.update_one(
+                {"name": y["name"], "$or": [{"phone": {"$exists": False}}, {"phone": None}, {"phone": ""}]},
+                {"$set": {"phone": y["phone"]}},
+            )
 
 
 @app.on_event("shutdown")

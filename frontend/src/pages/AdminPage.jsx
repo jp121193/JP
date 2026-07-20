@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatApiError } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
@@ -13,6 +13,8 @@ import {
   Boat,
   UsersThree,
   ArrowLeft,
+  UploadSimple,
+  DownloadSimple,
 } from "@phosphor-icons/react";
 
 const SECTIONS = [
@@ -25,6 +27,7 @@ function CeramicForm({ initial, onSave, onCancel }) {
   const [name, setName] = useState(initial?.name || "");
   const [category, setCategory] = useState(initial?.category || "");
   const [mapUrl, setMapUrl] = useState(initial?.map_url || "");
+  const [phone, setPhone] = useState(initial?.phone || "");
   return (
     <div className="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-testid="ceramic-form">
       <input
@@ -42,6 +45,13 @@ function CeramicForm({ initial, onSave, onCancel }) {
         onChange={(e) => setCategory(e.target.value)}
       />
       <input
+        data-testid="ceramic-form-phone"
+        className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
+        placeholder="WhatsApp number (e.g. +919825012345)"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <input
         data-testid="ceramic-form-map"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
         placeholder="Google Maps URL"
@@ -51,7 +61,7 @@ function CeramicForm({ initial, onSave, onCancel }) {
       <div className="flex gap-2">
         <button
           data-testid="ceramic-form-save"
-          onClick={() => onSave({ name, category, map_url: mapUrl })}
+          onClick={() => onSave({ name, category, map_url: mapUrl, phone: phone || null })}
           className="h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
         >
           Save
@@ -72,6 +82,7 @@ function YardForm({ initial, onSave, onCancel }) {
   const [name, setName] = useState(initial?.name || "");
   const [port, setPort] = useState(initial?.port || "Mundra");
   const [mapUrl, setMapUrl] = useState(initial?.map_url || "");
+  const [phone, setPhone] = useState(initial?.phone || "");
   return (
     <div className="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-testid="yard-form">
       <input
@@ -91,6 +102,13 @@ function YardForm({ initial, onSave, onCancel }) {
         <option value="Kandla">Kandla</option>
       </select>
       <input
+        data-testid="yard-form-phone"
+        className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
+        placeholder="WhatsApp number (e.g. +912836200001)"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <input
         data-testid="yard-form-map"
         className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm font-mono-jp"
         placeholder="Google Maps URL"
@@ -100,7 +118,7 @@ function YardForm({ initial, onSave, onCancel }) {
       <div className="flex gap-2">
         <button
           data-testid="yard-form-save"
-          onClick={() => onSave({ name, port, map_url: mapUrl })}
+          onClick={() => onSave({ name, port, map_url: mapUrl, phone: phone || null })}
           className="h-9 px-4 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
         >
           Save
@@ -113,6 +131,87 @@ function YardForm({ initial, onSave, onCancel }) {
           Cancel
         </button>
       </div>
+    </div>
+  );
+}
+
+const CERAMIC_TEMPLATE = "name,category,phone,map_url\nExample Ceramics Pvt Ltd,Wall Tiles,+919825000000,https://www.google.com/maps/place/Morbi,+Gujarat/@22.82,70.83,13z\n";
+const YARD_TEMPLATE = "name,port,phone,map_url\nExample Empty Yard,Mundra,+912836000000,https://www.google.com/maps/place/Mundra+Port/@22.74,69.71,13z\n";
+
+function downloadCsv(filename, content) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ImportBar({ testidPrefix, templateCsv, templateName, uploadPath, onDone }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const onPick = () => inputRef.current?.click();
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting same file
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast.error("Please choose a .csv file");
+      return;
+    }
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await api.post(uploadPath, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const { inserted, errors } = data;
+      if (inserted > 0) toast.success(`Imported ${inserted} row${inserted === 1 ? "" : "s"}`);
+      if (errors && errors.length > 0) {
+        toast.warning(`${errors.length} row(s) skipped. First: ${errors[0]}`);
+      }
+      if (inserted === 0 && (!errors || errors.length === 0)) {
+        toast.info("Nothing to import");
+      }
+      onDone?.();
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <button
+        data-testid={`${testidPrefix}-template-btn`}
+        onClick={() => downloadCsv(templateName, templateCsv)}
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        <DownloadSimple size={14} weight="bold" />
+        Template
+      </button>
+      <button
+        data-testid={`${testidPrefix}-import-btn`}
+        onClick={onPick}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 disabled:opacity-50 transition-colors"
+      >
+        <UploadSimple size={14} weight="bold" />
+        {busy ? "Uploading..." : "Import CSV"}
+      </button>
+      <input
+        ref={inputRef}
+        data-testid={`${testidPrefix}-file-input`}
+        type="file"
+        accept=".csv,text/csv"
+        onChange={onFile}
+        className="hidden"
+      />
     </div>
   );
 }
@@ -350,7 +449,14 @@ export default function AdminPage() {
           </ul>
         ) : section === "ceramics" ? (
           <div>
-            <div className="flex justify-end mb-3">
+            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+              <ImportBar
+                testidPrefix="ceramics"
+                templateCsv={CERAMIC_TEMPLATE}
+                templateName="ceramics_template.csv"
+                uploadPath="/admin/ceramics/import"
+                onDone={loadAll}
+              />
               <button
                 data-testid="admin-add-ceramic-btn"
                 onClick={() => setEditingCeramic("new")}
@@ -424,7 +530,14 @@ export default function AdminPage() {
           </div>
         ) : (
           <div>
-            <div className="flex justify-end mb-3">
+            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+              <ImportBar
+                testidPrefix="yards"
+                templateCsv={YARD_TEMPLATE}
+                templateName="yards_template.csv"
+                uploadPath="/admin/yards/import"
+                onDone={loadAll}
+              />
               <button
                 data-testid="admin-add-yard-btn"
                 onClick={() => setEditingYard("new")}
@@ -459,7 +572,8 @@ export default function AdminPage() {
                           {y.name}
                         </div>
                         <div className="text-xs text-slate-500 mt-1">
-                          Port · {y.port} ·{" "}
+                          Port · {y.port}
+                          {y.phone && <> · <span className="font-mono-jp">{y.phone}</span></>} ·{" "}
                           <a
                             href={y.map_url}
                             target="_blank"

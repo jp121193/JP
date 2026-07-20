@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the two new features on JP Directory Phase 2: (1) WhatsApp buttons on ceramic/yard listing rows and (2) Bulk CSV import for ceramics & yards + phone field on models/forms. Backend: 14/14 pytest cases passing across CSV import validation, RBAC, missing-field partial success, port validation, seed backfill and phone CRUD. Frontend: WhatsApp buttons render with correct wa.me/91xxxxx hrefs and target=_blank; Template downloads produce ceramics_template.csv / yards_template.csv; CSV upload shows 'Imported N rows' toast and new rows appear in the list; phone field is present in both ceramic and yard admin forms. One HIGH bug: the admin ceramic row does NOT display the phone number in the metadata line (yard admin row does).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminPage.jsx ceramic list row (admin-ceramic-row-*)",
+        "issue": "Phone number is not displayed in the ceramic admin row metadata. Current metadata line only shows '{category} · {map_url}'. Review requirement explicitly states 'Admin row for ceramics/yards displays phone number in metadata line alongside category/port.' Yards row already does this correctly (line 576) but the ceramic row (lines 496-506) omits `{c.phone && ...}`.",
+        "selector": "[data-testid^=\"admin-ceramic-row-\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_csv_import_and_phone.py",
+    "/app/test_reports/pytest/csv_import_results.xml"
+  ],
+  "action_items": [
+    "In /app/frontend/src/pages/AdminPage.jsx around line 497, add phone display to the ceramic admin row metadata, matching how yard row shows it. Example: `{c.category}{c.phone && <> · <span className=\"font-mono-jp\">{c.phone}</span></>} · <a ...>{c.map_url}</a>`"
+  ],
+  "critical_code_review_comments": [
+    "AdminPage.jsx: ceramic admin row missing phone in metadata line (asymmetry with yard row).",
+    "server.py: startup backfill migration works but is O(N) inserts per boot; consider a single migration flag once stable.",
+    "CSV import silently accepts any values for phone (no format validation); acceptable for MVP but note for future."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_csv_import_and_phone.py",
+    "/app/test_reports/pytest/csv_import_results.xml"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "94% (17/18 checks - phone display on ceramic admin row missing)"},
+  "test_credentials": "Admin mobile 9999999999 / password admin@JP2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests use TEST_/UITEST/UIYARD prefixes. Cleanup performed after run - no residual data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend CSV import is fully working. If retesting after the phone-display fix on ceramic admin row, only need to verify the ceramic row on /admin > Ceramics shows the phone next to category (currently it only shows category and map URL). The 6 seed yards already have phone populated by backfill; same for the 5 seed ceramics.",
+  "rca of the issue": "AdminPage.jsx ceramic row template was written before the phone field was added; when phone support was later added to the model and form, the yard row template was updated to include `{y.phone && ...}` but the equivalent line for ceramic row was missed. Fix: mirror the yard row's phone rendering into the ceramic row's metadata div."
+}
